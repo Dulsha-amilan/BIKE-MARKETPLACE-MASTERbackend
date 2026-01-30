@@ -11,6 +11,10 @@ export type FrontendSeed = {
 
 let cachedSeed: FrontendSeed | null = null;
 
+function isErrnoWithCode(err: unknown, code: string): boolean {
+  return typeof err === 'object' && err !== null && (err as any).code === code;
+}
+
 async function findRepoRootFromCwd(): Promise<string> {
   // Expected layouts:
   // - repoRoot/ (contains src/)
@@ -58,15 +62,28 @@ async function loadNamedExport<T = any>(relativeToRepoRoot: string, exportName: 
   return (context as any).exports[exportName] as T;
 }
 
+async function loadNamedExportOptional<T>(
+  relativeToRepoRoot: string,
+  exportName: string,
+  fallback: T,
+): Promise<T> {
+  try {
+    return await loadNamedExport<T>(relativeToRepoRoot, exportName);
+  } catch (err) {
+    if (isErrnoWithCode(err, 'ENOENT')) return fallback;
+    throw err;
+  }
+}
+
 export async function loadFrontendSeed(): Promise<FrontendSeed> {
   if (cachedSeed) return cachedSeed;
 
   const [sampleVehicles, sparePartsData, bikerGearData, chatbotResponses] =
     await Promise.all([
-      loadNamedExport<any[]>('src/data/sampleVehicles.js', 'sampleVehicles'),
-      loadNamedExport<any[]>('src/data/sparePartsData.js', 'sparePartsData'),
-      loadNamedExport<any[]>('src/data/bikerGearData.js', 'bikerGearData'),
-      loadNamedExport<Record<string, any>>('src/data/chatbotData.js', 'chatbotResponses'),
+      loadNamedExportOptional<any[]>('src/data/sampleVehicles.js', 'sampleVehicles', []),
+      loadNamedExportOptional<any[]>('src/data/sparePartsData.js', 'sparePartsData', []),
+      loadNamedExportOptional<any[]>('src/data/bikerGearData.js', 'bikerGearData', []),
+      loadNamedExportOptional<Record<string, any>>('src/data/chatbotData.js', 'chatbotResponses', {}),
     ]);
 
   cachedSeed = {

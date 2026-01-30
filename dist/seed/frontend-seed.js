@@ -41,6 +41,9 @@ const path = __importStar(require("node:path"));
 const node_fs_1 = require("node:fs");
 const node_vm_1 = __importDefault(require("node:vm"));
 let cachedSeed = null;
+function isErrnoWithCode(err, code) {
+    return typeof err === 'object' && err !== null && err.code === code;
+}
 async function findRepoRootFromCwd() {
     const cwd = process.cwd();
     const base = path.basename(cwd).toLowerCase();
@@ -73,14 +76,24 @@ async function loadNamedExport(relativeToRepoRoot, exportName) {
     node_vm_1.default.runInContext(transformed, context, { filename: abs, timeout: 1000 });
     return context.exports[exportName];
 }
+async function loadNamedExportOptional(relativeToRepoRoot, exportName, fallback) {
+    try {
+        return await loadNamedExport(relativeToRepoRoot, exportName);
+    }
+    catch (err) {
+        if (isErrnoWithCode(err, 'ENOENT'))
+            return fallback;
+        throw err;
+    }
+}
 async function loadFrontendSeed() {
     if (cachedSeed)
         return cachedSeed;
     const [sampleVehicles, sparePartsData, bikerGearData, chatbotResponses] = await Promise.all([
-        loadNamedExport('src/data/sampleVehicles.js', 'sampleVehicles'),
-        loadNamedExport('src/data/sparePartsData.js', 'sparePartsData'),
-        loadNamedExport('src/data/bikerGearData.js', 'bikerGearData'),
-        loadNamedExport('src/data/chatbotData.js', 'chatbotResponses'),
+        loadNamedExportOptional('src/data/sampleVehicles.js', 'sampleVehicles', []),
+        loadNamedExportOptional('src/data/sparePartsData.js', 'sparePartsData', []),
+        loadNamedExportOptional('src/data/bikerGearData.js', 'bikerGearData', []),
+        loadNamedExportOptional('src/data/chatbotData.js', 'chatbotResponses', {}),
     ]);
     cachedSeed = {
         sampleVehicles: Array.isArray(sampleVehicles) ? sampleVehicles : [],
