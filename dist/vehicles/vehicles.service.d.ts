@@ -7,10 +7,7 @@ export declare class VehiclesService {
     private readonly logger;
     private seedVehicles;
     private userVehicles;
-    private usingFirestore;
     private readonly vehiclesCollection;
-    private readonly persistence;
-    private readonly store;
     constructor(firebase: FirebaseService);
     onModuleInit(): Promise<void>;
     listAll(): Vehicle[];
@@ -21,7 +18,5 @@ export declare class VehiclesService {
     remove(id: string): Promise<void>;
     private saveUserVehicle;
     private deleteUserVehicle;
-    private persistFile;
-    private loadUserVehiclesFromFile;
-    private tryLoadUserVehiclesFromFirestore;
+    private loadUserVehiclesFromFirestore;
 }

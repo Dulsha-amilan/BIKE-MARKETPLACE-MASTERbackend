@@ -4,16 +4,12 @@ import {
   ForbiddenException,
   Logger,
 } from '@nestjs/common';
-import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { JsonFileStore } from '../common/json-file-store';
 import { loadFrontendSeed } from '../seed/frontend-seed';
 import { Vehicle } from './vehicle.model';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto';
 import { FirebaseService } from '../firebase/firebase.service';
-
-type UserVehiclesFile = { vehicles: Vehicle[] };
 
 @Injectable()
 export class VehiclesService {
@@ -21,16 +17,9 @@ export class VehiclesService {
   private seedVehicles: Vehicle[] = [];
   private userVehicles: Vehicle[] = [];
 
-  private usingFirestore = false;
   private readonly vehiclesCollection = process.env.VEHICLES_COLLECTION || 'vehicles';
-  private readonly persistence = (process.env.VEHICLES_PERSISTENCE || 'firestore').toLowerCase();
 
-  private readonly store = new JsonFileStore<UserVehiclesFile>(
-    path.resolve(process.cwd(), 'storage/user-vehicles.json'),
-    { vehicles: [] },
-  );
-
-  constructor(private readonly firebase: FirebaseService) {}
+  constructor(private readonly firebase: FirebaseService) { }
 
   async onModuleInit() {
     const seed = await loadFrontendSeed();
@@ -39,37 +28,7 @@ export class VehiclesService {
       source: 'seed' as const,
     }));
 
-    const legacyFileVehicles = await this.loadUserVehiclesFromFile();
-
-    if (this.persistence === 'file') {
-      this.usingFirestore = false;
-      this.userVehicles = legacyFileVehicles;
-      return;
-    }
-
-    const firestoreVehicles = await this.tryLoadUserVehiclesFromFirestore();
-    this.userVehicles = firestoreVehicles;
-
-    // One-time-ish migration: if Firestore is empty but legacy file has vehicles, upload them.
-    if (this.usingFirestore && this.userVehicles.length === 0 && legacyFileVehicles.length > 0) {
-      this.logger.log(
-        `Migrating ${legacyFileVehicles.length} legacy vehicles from storage/user-vehicles.json to Firestore collection "${this.vehiclesCollection}"...`,
-      );
-      try {
-        const db = await this.firebase.firestore();
-        await Promise.all(
-          legacyFileVehicles.map((v) =>
-            db
-              .collection(this.vehiclesCollection)
-              .doc(v.id)
-              .set({ ...v, source: 'user' }, { merge: true }),
-          ),
-        );
-        this.userVehicles = legacyFileVehicles;
-      } catch (err) {
-        this.logger.warn('Firestore migration failed; continuing with Firestore data only.', err as any);
-      }
-    }
+    await this.loadUserVehiclesFromFirestore();
   }
 
   listAll(): Vehicle[] {
@@ -175,50 +134,29 @@ export class VehiclesService {
   private async saveUserVehicle(vehicle: Vehicle) {
     const v = { ...vehicle, source: 'user' as const };
 
-    if (this.persistence !== 'file' && this.usingFirestore) {
-      try {
-        const db = await this.firebase.firestore();
-        await db
-          .collection(this.vehiclesCollection)
-          .doc(v.id)
-          .set(stripUndefined(v), { merge: true });
-        return;
-      } catch (err) {
-        this.logger.warn('Failed writing vehicle to Firestore; falling back to file storage.', err as any);
-        this.usingFirestore = false;
-      }
+    try {
+      const db = await this.firebase.firestore();
+      await db
+        .collection(this.vehiclesCollection)
+        .doc(v.id)
+        .set(stripUndefined(v), { merge: true });
+    } catch (err) {
+      this.logger.error('Failed writing vehicle to Firestore', err as any);
+      throw err;
     }
-
-    await this.persistFile();
   }
 
   private async deleteUserVehicle(id: string) {
-    if (this.persistence !== 'file' && this.usingFirestore) {
-      try {
-        const db = await this.firebase.firestore();
-        await db.collection(this.vehiclesCollection).doc(id).delete();
-        return;
-      } catch (err) {
-        this.logger.warn('Failed deleting vehicle from Firestore; falling back to file storage.', err as any);
-        this.usingFirestore = false;
-      }
+    try {
+      const db = await this.firebase.firestore();
+      await db.collection(this.vehiclesCollection).doc(id).delete();
+    } catch (err) {
+      this.logger.error('Failed deleting vehicle from Firestore', err as any);
+      throw err;
     }
-
-    await this.persistFile();
   }
 
-  private async persistFile() {
-    await this.store.write({ vehicles: this.userVehicles.map((v) => ({ ...v, source: 'user' })) });
-  }
-
-  private async loadUserVehiclesFromFile(): Promise<Vehicle[]> {
-    const persisted = await this.store.read();
-    return Array.isArray(persisted.vehicles)
-      ? persisted.vehicles.map((v) => ({ ...v, source: 'user' as const }))
-      : [];
-  }
-
-  private async tryLoadUserVehiclesFromFirestore(): Promise<Vehicle[]> {
+  private async loadUserVehiclesFromFirestore(): Promise<void> {
     try {
       const db = await this.firebase.firestore();
       const snap = await db.collection(this.vehiclesCollection).get();
@@ -234,15 +172,13 @@ export class VehiclesService {
         })
         .filter((v) => v && v.id);
 
-      this.usingFirestore = true;
-      return vehicles;
+      this.userVehicles = vehicles;
     } catch (err) {
-      this.usingFirestore = false;
-      this.logger.warn(
-        'Firestore is not available (check FIREBASE_SERVICE_ACCOUNT_PATH / FIREBASE_SERVICE_ACCOUNT_JSON). Using file storage for user vehicles.',
+      this.logger.error(
+        'Firestore is not available (check FIREBASE_SERVICE_ACCOUNT_PATH / FIREBASE_SERVICE_ACCOUNT_JSON).',
         err as any,
       );
-      return await this.loadUserVehiclesFromFile();
+      this.userVehicles = [];
     }
   }
 }
