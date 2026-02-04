@@ -1,0 +1,20 @@
+# compiled output
+/dist
+/node_modules
+
+# logs
+npm-debug.log
+yarn-error.log
+
+# secrets and env
+.env
+/secrets
+serviceAccountKey.json
+
+# uploads (if local)
+/uploads
+
+# misc
+.DS_Store
+
+secrets/serviceAccountKey.json

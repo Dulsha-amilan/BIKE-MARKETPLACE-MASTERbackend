@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
-import { AppModule } from './app.module';
+import helmet from 'helmet';
+import { AppModule } from './app.module'; // fixed import order
 import * as express from 'express';
 import * as path from 'node:path';
 
@@ -9,9 +10,14 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api');
 
+  // Security Headers
+  app.use(helmet());
+
+  // CORS
   app.enableCors({
     origin: process.env.CORS_ORIGIN || '*',
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE'],
+    credentials: true,
   });
 
   app.useGlobalPipes(

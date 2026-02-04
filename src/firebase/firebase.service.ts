@@ -37,6 +37,8 @@ export class FirebaseService {
     if (!p) return null;
 
     const resolved = path.isAbsolute(p) ? p : path.resolve(process.cwd(), p);
+    console.log('[DEBUG] FIREBASE_SERVICE_ACCOUNT_PATH:', p);
+    console.log('[DEBUG] Resolved Service Account Path:', resolved);
 
     try {
       const raw = await fs.readFile(resolved, 'utf8');
@@ -44,8 +46,10 @@ export class FirebaseService {
       this.app = admin.initializeApp({
         credential: admin.credential.cert(json),
       });
+      console.log('[DEBUG] Firebase App Initialized from Path');
       return this.app;
-    } catch {
+    } catch (e) {
+      console.error('[DEBUG] Failed to init Firebase from path:', e);
       return null;
     }
   }

@@ -142,6 +142,7 @@ export class VehiclesService {
         .set(stripUndefined(v), { merge: true });
     } catch (err) {
       this.logger.error('Failed writing vehicle to Firestore', err as any);
+      console.error('[DEBUG] Firestore Write Error:', err);
       throw err;
     }
   }

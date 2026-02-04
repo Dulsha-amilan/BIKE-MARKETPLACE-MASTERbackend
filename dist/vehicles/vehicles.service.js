@@ -130,6 +130,7 @@ let VehiclesService = VehiclesService_1 = class VehiclesService {
         }
         catch (err) {
             this.logger.error('Failed writing vehicle to Firestore', err);
+            console.error('[DEBUG] Firestore Write Error:', err);
             throw err;
         }
     }
