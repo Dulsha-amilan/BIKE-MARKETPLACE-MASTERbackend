@@ -11,7 +11,13 @@ async function bootstrap() {
   app.setGlobalPrefix('api');
 
   // Security Headers
-  app.use(helmet());
+  app.use(
+    helmet({
+      // Allow the frontend (different origin/port) to load uploaded images.
+      // Without this, browsers block /uploads/* due to CORP = same-origin.
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+    }),
+  );
 
   // CORS
   app.enableCors({
